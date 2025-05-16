@@ -1,5 +1,5 @@
 # 使用官方轻量 Python 3.12 镜像
-FROM python:3.12-slim
+FROM python:3.12-slim-bookworm
 
 # 设置工作目录
 WORKDIR /app
