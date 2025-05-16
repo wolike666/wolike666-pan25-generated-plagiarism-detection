@@ -3,6 +3,7 @@
 
 # 忽略数据集目录（可选：若想单独管理数据集）
 00_spot_check/
+00_spot_output/
 01_train/
 02_validation/
 
