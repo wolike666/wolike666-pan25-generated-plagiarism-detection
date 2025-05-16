@@ -9,3 +9,6 @@
 
 # 忽略detect.py
 detect.py
+
+# 忽略检测结果目录
+YOUR-UPLOAD/
