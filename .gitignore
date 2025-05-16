@@ -7,8 +7,10 @@
 01_train/
 02_validation/
 
-# 忽略detect.py
+# 忽略detect.py和pan12-plagiarism-detection-evaluation.py
 detect.py
+pan12-plagiarism-detection-evaluation.py
+
 
 # 忽略检测结果目录
 YOUR-UPLOAD/
