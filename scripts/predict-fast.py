@@ -160,8 +160,6 @@ def main():
             m2 = vec.transform(t_sents)                # src 的句子向量
             sim = (m1 @ m2.T).toarray()                 # 稀疏矩阵乘积 → 稠密矩阵
             del m1, m2                                 # 及时释放
-            # 加载对应 truth 的 obfuscation 级别
-            obf_lv = load_obf_levels(os.path.join(args.truth_dir,f"{susp[:-4]}-{src[:-4]}.xml"))
 
             # 遍历所有相似度 >= threshold_tfidf 的句对
             for a,b in zip(*np.where(sim >= args.threshold_tfidf)):
@@ -171,9 +169,8 @@ def main():
                 if sl < args.min_len or len(ts) < args.min_len:
                     continue
                 # 判断此句对的 obfuscation 级别
-                obf = next((lbl for x,y,lbl in obf_lv if x<=so<y),None)
                 # 不管 obf，先都收集到 bert_candidates
-                bert_candidates.append((i, ss, ts, so, sl, obf))
+                bert_candidates.append((i, ss, ts, so, sl, None))
             gc.collect()
 
         # -------- 分块内：BERT 批量推理 --------

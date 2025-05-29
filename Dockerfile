@@ -1,5 +1,4 @@
-# Use a slim Python base image
-FROM python:3.9-slim
+FROM nvcr.io/nvidia/cuda:12.8.0-cudnn-devel-ubuntu24.04
 
 # Prevent Python from writing .pyc files and buffering stdout/stderr
 ENV PYTHONUNBUFFERED=1 \
@@ -12,7 +11,9 @@ WORKDIR /app
 COPY requirements.txt .
 
 # Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+RUN apt-get update && apt-get install -y python3-pip && pip3 install --no-cache-dir --break-system-packages -r requirements.txt
+
+RUN python3 -c 'import nltk; nltk.download("punkt_tab")'
 
 # Copy application code
 COPY run.py .

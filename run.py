@@ -12,7 +12,7 @@ def main():
 
     # 直接使用 Hugging Face 地址进行推理
     cmd = [
-        "python", "scripts/predict-fast.py",
+        "python3", "scripts/predict-fast.py",
         "--model_dir", "jrluo/PlagiarismDetection-bert-base-train10000",
         "--data_dir",  args.input,
         "--truth_dir", args.input,
