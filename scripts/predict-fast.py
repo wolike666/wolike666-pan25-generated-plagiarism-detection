@@ -8,21 +8,22 @@ predict_fast_chunked.py — 分块＋pipeline 批量化推理
   3. 一次性交给 pipeline
   4. 拆分结果、写 XML
 用法：
-  python scripts/predict_fast_chunked.py \
-    --model_dir ./bert-base-train10000 \
-    --data_dir  ./02_validation/02_validation \
-    --truth_dir ./02_validation/02_validation_truth \
-    --output_dir ./fast_chunked_output \
-    --threshold_tfidf 0.7 \
-    --threshold_jaccard 0.7 \
-    --threshold_bert 0.8 \
-    --batch_size 64 \
-    --min_len 50 \
-    --merge_gap 20 \
-    --chunk_size 100
- python scripts/predict-fast.py --model_dir ./bert-base-train10000 --data_dir  ./02_validation/02_validation --truth_dir ./02_validation/02_validation_truth --output_dir ./chunked-v1-validation-UPLOAD --threshold_tfidf 0.7  --threshold_jaccard 0.7 --threshold_bert 0.8 --batch_size 64 --min_len 50 --merge_gap 20 --chunk_size 100
-
+    python scripts/predict-fast.py \
+      --model_dir ./bert-base-train10000 \
+      --data_dir 00_spot_check/00_spot_check \
+      --truth_dir 00_spot_check/00_spot_check_truth \
+      --output_dir ./chunked-v1-spot-output2 \
+      --threshold_tfidf 0.7 \
+      --threshold_jaccard_simple 0.4 \
+      --threshold_jaccard_other 0.7 \
+      --threshold_bert 0.8 \
+      --threshold_bert_simple 0.75 \
+      --batch_size 64 \
+      --min_len 50 \
+      --merge_gap 20 \
+      --chunk_size 100
 """
+
 import os, gc, argparse
 import numpy as np
 import torch
@@ -40,8 +41,12 @@ def parse_args():
     p.add_argument('--truth_dir',      required=True)
     p.add_argument('--output_dir',     required=True)
     p.add_argument('--threshold_tfidf',  type=float, default=0.7)
-    p.add_argument('--threshold_jaccard',type=float, default=0.7)
-    p.add_argument('--threshold_bert',   type=float, default=0.8)
+    p.add_argument('--threshold_jaccard_simple', type=float, default=0.4)
+    p.add_argument('--threshold_jaccard_other', type=float, default=0.7)
+    p.add_argument('--threshold_bert', type=float, default=0.8,
+                                          help = "medium/hard 的 BERT 阈值")
+    p.add_argument('--threshold_bert_simple', type=float, default=None,
+                                           help = "simple 的 BERT 阈值，若留空则使用 --threshold_bert")
     p.add_argument('--batch_size',       type=int,   default=64)
     p.add_argument('--min_len',          type=int,   default=50)
     p.add_argument('--merge_gap',        type=int,   default=20)
@@ -84,6 +89,11 @@ def load_obf_levels(fn):
 
 def main():
     args = parse_args()
+
+    # 如果没有单独指定 simple 的阈值，就用通用阈值
+    if args.threshold_bert_simple is None:
+        args.threshold_bert_simple = args.threshold_bert
+
     os.makedirs(args.output_dir, exist_ok=True)
 
     # =========================================
@@ -107,7 +117,7 @@ def main():
     # 2. 初始化 Hugging Face pipeline
     # =========================================
     # 加载 tokenizer 和模型，并封装为 text-classification pipeline
-    tokenizer = AutoTokenizer.from_pretrained(args.model_dir, local_files_only=True)
+    tokenizer = AutoTokenizer.from_pretrained(args.model_dir)
     clf = pipeline(
         "text-classification",
         model=args.model_dir,
@@ -162,26 +172,23 @@ def main():
                     continue
                 # 判断此句对的 obfuscation 级别
                 obf = next((lbl for x,y,lbl in obf_lv if x<=so<y),None)
-                if obf=="simple":
-                    # simple 级别用 Jaccard 二次过滤
-                    if jaccard(ss,ts) >= args.threshold_jaccard:
-                        to, tl = t_txt.find(ts), len(ts)
-                        feats[i].append((so,so+sl,src,to,tl))
-                else:
-                    # medium/hard 则交给 BERT pipeline
-                    bert_candidates.append((i, ss, ts, so, sl))
+                # 不管 obf，先都收集到 bert_candidates
+                bert_candidates.append((i, ss, ts, so, sl, obf))
             gc.collect()
 
         # -------- 分块内：BERT 批量推理 --------
         if bert_candidates:
             # 构造 pipeline 输入
-            texts = [(ss,ts) for (_,ss,ts,_,_) in bert_candidates]
+            texts = [(ss, ts) for (_, ss, ts, _, _, _) in bert_candidates]
             preds = clf(texts)   # 批量前向
 
             # 解析结果，保留置信度 >= threshold_bert 的
-            for (idx,ss,ts,so,sl),res in zip(bert_candidates, preds):
+            for (idx, ss, ts, so, sl, obf), res in zip(bert_candidates, preds):
                 score = res["score"] if isinstance(res,dict) else res[0]["score"]
-                if score >= args.threshold_bert:
+                # 不同 obf 用不同阈值
+                thr = args.threshold_bert_simple if obf == 'simple' else args.threshold_bert
+
+                if score >= thr:
                     # 再次定位 source 中文本偏移
                     to, tl = open(os.path.join(src_dir, chunk[idx][1]),encoding="utf-8").read().find(ts), len(ts)
                     feats[idx].append((so,so+sl, chunk[idx][1], to, tl))
